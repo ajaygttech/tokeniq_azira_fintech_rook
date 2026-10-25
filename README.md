@@ -2,6 +2,40 @@
 
 Next.js 15 / React 19 workspace with a Python FastAPI Supertrend execution engine and SQLite archive.
 
+## Deployed website and admin login
+
+TokenIQ is deployed at **[https://tokeniq.rookcapital.in/](https://tokeniq.rookcapital.in/)**.
+
+1. Open the website.
+2. Enter username **`admin`** and password **`1234`**.
+3. Click **Sign in** to open the dashboard.
+
+These are the current deployed workspace credentials requested by the owner. A fresh installation uses the password you set during setup; cloning this repository does not configure that password automatically. The server stores a salted password hash in its private `.env` file.
+
+Source code: **[ajaygttech/tokeniq_azira_fintech_rook](https://github.com/ajaygttech/tokeniq_azira_fintech_rook)**, branch **`main`**.
+The deployed source directory is `/var/www/tokeniq`.
+
+| Part | Language / framework | Source |
+| --- | --- | --- |
+| Frontend | TypeScript, React, Next.js, CSS | `app/` |
+| Backend | Python, FastAPI, Uvicorn | `backend/` |
+| Database | SQLite | Server-local `tokeniq.db`, excluded from Git |
+| Deployment | Nginx and systemd | `deploy/` |
+
+## Add a broker account
+
+This deployment supports **Delta Exchange Testnet accounts only**.
+
+1. In your Delta Exchange Testnet account, create an API key and API secret with account read and trading permissions. Whitelist the server's outbound IPv4 if required by the key settings.
+2. Log in to TokenIQ and open **Brokers** in the left sidebar.
+3. Click **Add account**. The broker is **Delta Exchange · Testnet account**.
+4. Enter a **Client name**, **API key**, and **API secret**.
+5. Click **Verify & add account**. TokenIQ checks account access before saving the credentials encrypted on the server; verification does not place a trade.
+6. The first account becomes **Primary** automatically. Use **Verify** to check a saved connection, or select **Primary** on another account to make it the default for the next strategy Start.
+7. On **Overview**, use **Create instance**, configure the strategy and choose Primary, Primary + all accounts, or selected accounts. Save it, then press **Start** when ready. Adding a broker or saving an instance does not start trading.
+
+Production API keys are not supported. Different keys for the same Delta account cannot be connected as separate clients. Running instances retain their original accounts when Primary changes. Compare strategy signals with the **Testnet/demo Traded Price chart**: production candles and Supertrend signals can differ.
+
 ## Setup
 
 ```bash
