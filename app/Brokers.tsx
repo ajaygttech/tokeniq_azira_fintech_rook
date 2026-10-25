@@ -1,0 +1,30 @@
+'use client';
+import {useEffect,useRef,useState} from 'react';
+import {KeyRound,Plus,ShieldCheck,X,Loader2} from 'lucide-react';
+import {requestJson as api} from './request';
+type Row=Record<string,any>;
+export function Brokers({onUpdate}:{onUpdate:()=>void}){
+ const [accounts,setAccounts]=useState<Row[]>([]),[open,setOpen]=useState(false),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState(false);
+ const [clientName,setClientName]=useState(''),[key,setKey]=useState(''),[secret,setSecret]=useState('');
+ const panel=useRef<HTMLDivElement>(null);const lock=useRef(false);
+ async function refresh(){const response=await api('brokers');setAccounts(response.accounts)}
+ useEffect(()=>{refresh().catch(e=>{setMessage(e.message);setError(true)})},[]);
+ useEffect(()=>{
+  if(!open)return;const previous=document.activeElement as HTMLElement;const overflow=document.body.style.overflow;document.body.style.overflow='hidden';panel.current?.focus();
+  function keyboard(e:KeyboardEvent){
+   if(e.key==='Escape'&&!lock.current){setOpen(false);setKey('');setSecret('')}
+   if(e.key==='Tab'&&panel.current){const nodes=panel.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)');const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}
+  }
+  document.addEventListener('keydown',keyboard);return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',keyboard);previous?.focus()}
+ },[open]);
+ async function action(kind:string,account?:Row){
+  if(lock.current)return;lock.current=true;setBusy(kind+(account?':'+account.id:''));setMessage('');setError(false);
+  try{
+   if(kind==='add'){await api('brokers',{client_name:clientName,broker:'delta_testnet',api_key:key,api_secret:secret});setKey('');setSecret('');setClientName('');setOpen(false);setMessage('Delta Testnet account verified and connected.')}
+   else{await api(`brokers/${account!.id}/${kind}`,{});setMessage(kind==='primary'?`${account!.client_name} is now primary. Running instances keep their existing accounts.`:'Testnet connection verified.')}
+   await refresh();onUpdate();
+  }catch(e:any){setMessage(e.message);setError(true)}finally{lock.current=false;setBusy('')}
+ }
+ function close(){if(!busy){setOpen(false);setKey('');setSecret('')}}
+ return <><section className="panel"><div className="panel-head"><div><h3><ShieldCheck size={18}/> Broker accounts</h3><p className="tiny-note">Delta Exchange · Testnet accounts only</p></div><button className="primary" onClick={()=>{setMessage('');setOpen(true)}}><Plus size={15}/> Add account</button></div>{message&&!open&&<div className={'strategy-message '+(error?'error':'')} role={error?'alert':'status'}>{message}</div>}<div className="broker-accounts">{accounts.length?accounts.map(account=><article className="broker-account" key={account.id}><div className="broker-account-title"><ShieldCheck size={23}/><div><h3>{account.client_name}</h3><p>Delta Exchange · Testnet account</p></div><span className={'tag '+(account.is_primary?'green':'muted')}>{account.is_primary?'PRIMARY':'SECONDARY'}</span></div><div className="broker-account-footer"><small>{account.verified_at?'Connection verified':'Imported account · verify connection'}</small><div className="inline-actions"><button className="text-button" disabled={!!busy} onClick={()=>action('verify',account)}>{busy==='verify:'+account.id?<Loader2 className="spin" size={13}/>:<ShieldCheck size={13}/>} Verify</button><label className="primary-account-check"><input type="checkbox" aria-label={`Primary account ${account.client_name}`} checked={!!account.is_primary} disabled={!!busy||!!account.is_primary} onChange={()=>action('primary',account)}/>Primary</label></div></div></article>):<div className="empty"><KeyRound size={28}/><strong>No broker accounts connected</strong><span>Add your Delta Testnet API key and secret. Your first account becomes primary.</span></div>}</div><div className="panel-foot">Choose Primary, Primary + all accounts, or selected accounts in each instance. Primary changes apply on the next Start; active positions stay with their original account.</div></section>{open&&<div className="strategy-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><div ref={panel} tabIndex={-1} className="strategy-workspace workspace-dialog broker-dialog" role="dialog" aria-modal="true" aria-label="Add broker account"><div className="strategy-desk-header"><div><span className="eyebrow">CONNECT ACCOUNT</span><h2>Add broker account</h2><p>Connect another Delta Exchange Testnet client.</p></div><button className="icon-button" aria-label="Close broker dialog" disabled={!!busy} onClick={close}><X/></button></div>{message&&<div className={'strategy-message '+(error?'error':'')} role={error?'alert':'status'}>{message}</div>}<form onSubmit={e=>{e.preventDefault();action('add')}}><fieldset disabled={!!busy}><label>Broker<select value="delta_testnet" onChange={()=>{}}><option value="delta_testnet">Delta Exchange · Testnet account</option></select></label><label>Client name<input autoComplete="off" required maxLength={80} value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="e.g. Rook Capital — Account 2"/></label><label>API key<input type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={key} onChange={e=>setKey(e.target.value)}/></label><label>API secret<input type="password" autoComplete="new-password" required minLength={8} maxLength={512} value={secret} onChange={e=>setSecret(e.target.value)}/></label></fieldset><p className="tiny-note">Use Testnet API credentials with account read and trading permissions. Credentials are encrypted on the server and are never returned to the browser.</p><button className="primary full" disabled={!!busy}>{busy?<Loader2 size={15} className="spin"/>:<ShieldCheck size={15}/>} {busy?'Verifying Testnet account…':'Verify & add account'}</button></form></div></div>}</>;
+}

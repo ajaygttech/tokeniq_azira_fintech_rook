@@ -1,0 +1,13 @@
+[Unit]
+Description=TokenIQ Python API
+After=network-online.target
+[Service]
+Type=simple
+WorkingDirectory=/var/www/tokeniq
+ExecStart=/var/www/tokeniq/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8100 --no-proxy-headers
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=TokenIQ Next.js
+After=network-online.target tokeniq-api.service
+[Service]
+Type=simple
+WorkingDirectory=/var/www/tokeniq
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
