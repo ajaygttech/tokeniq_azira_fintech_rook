@@ -167,7 +167,112 @@ PY
 
 Replace `PASTE_CLIENT_ORDER_ID_HERE` with the client order ID printed during submission.
 
-## 6. Remove the local sign-in cookie
+## 6. View strategy, candle and error logs through the API
+
+Sign in using section 1 first. These commands only read logs; they do not start trading. You can also open **Strategy logs** on the website.
+
+Latest 300 saved events, as JSON (newest first):
+
+```bash
+curl --fail-with-body -sS -b "$COOKIE_FILE" "$API_BASE/api/logs" |
+  .venv/bin/python -m json.tool
+```
+
+Readable events in IST, oldest to newest within the latest 300:
+
+```bash
+curl --fail-with-body -sS -b "$COOKIE_FILE" "$API_BASE/api/logs" |
+  .venv/bin/python -c 'import sys,json; from datetime import datetime; from zoneinfo import ZoneInfo; rows=json.load(sys.stdin); [print(datetime.fromisoformat(r["time"]).astimezone(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y %H:%M:%S IST"), r["level"], r["message"]) for r in reversed(rows)]'
+```
+
+Filter those events by instrument, instance name, BUY/SELL or error. Change the `rg` pattern as needed:
+
+```bash
+curl --fail-with-body -sS -b "$COOKIE_FILE" "$API_BASE/api/logs" |
+  .venv/bin/python -c 'import sys,json; [print(r["time"],r["level"],r["message"]) for r in reversed(json.load(sys.stdin))]' |
+  rg -i 'ETHUSD|ERROR|Red flip|Green flip'
+```
+
+API timestamps in this filtered command are UTC. No matching event makes `rg` exit with code 1. A candle log includes OHLC, ATR, Supertrend, direction, flip signal and decision. An initial baseline, HOLD or WAIT is not an order confirmation. Successful entry logs include filled quantity and average fill price. A reversal can create two orders: close the old position, then open the opposite position.
+
+Download the latest 300 events as CSV:
+
+```bash
+curl --fail-with-body -sS -b "$COOKIE_FILE" \
+  "$API_BASE/api/export/logs" -o /tmp/tokeniq-logs.csv
+```
+
+## 7. View service logs and follow live output
+
+Run on the server. `sudo` may be needed for journal access. These are process/server logs; strategy candle events are saved in SQLite and exposed by section 6, and may not appear in the journal.
+
+Recent backend logs:
+
+```bash
+sudo journalctl -u tokeniq-api.service -n 100 --no-pager
+```
+
+Follow new backend output continuously; press **Ctrl+C** to stop viewing (the service keeps running):
+
+```bash
+sudo journalctl -u tokeniq-api.service -n 50 -f
+```
+
+Last 30 minutes, with timestamps displayed in IST:
+
+```bash
+sudo env TZ=Asia/Kolkata journalctl -u tokeniq-api.service \
+  --since '30 minutes ago' --no-pager -o short-iso
+```
+
+Frontend server logs:
+
+```bash
+sudo journalctl -u tokeniq-web.service -n 100 --no-pager
+```
+
+## 8. Read older saved strategy logs directly from SQLite
+
+This reads the existing database without importing the application or restarting its engine. Unlike the API's latest-300 view, it can search older retained events. Run from `/var/www/tokeniq`. The example uses the deployment's default database path; adjust it if `TOKENIQ_DB` is configured differently.
+
+Edit `symbol`, `start` and `end` for the incident. Times below are **IST**, and the end is exclusive:
+
+```bash
+.venv/bin/python - <<'PY'
+import sqlite3
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+symbol = "ETHUSD"
+start = "2026-10-25 16:15:00"
+end = "2026-10-25 16:21:00"
+ist = ZoneInfo("Asia/Kolkata")
+
+def utc(value):
+    return datetime.fromisoformat(value).replace(tzinfo=ist).astimezone(timezone.utc).isoformat()
+
+with sqlite3.connect("file:/var/www/tokeniq/tokeniq.db?mode=ro", uri=True) as db:
+    rows = db.execute(
+        "SELECT time,level,message FROM logs "
+        "WHERE time >= ? AND time < ? AND message LIKE ? ORDER BY id",
+        (utc(start), utc(end), "%" + symbol + "%")
+    )
+    for timestamp, level, message in rows:
+        timestamp = datetime.fromisoformat(timestamp).astimezone(ist)
+        print(timestamp.strftime("%d %b %Y %H:%M:%S IST"), level, message)
+PY
+```
+
+## 9. Check service and API health
+
+```bash
+sudo systemctl status tokeniq-api.service tokeniq-web.service --no-pager -l
+curl --fail-with-body -sS http://127.0.0.1:8100/health | .venv/bin/python -m json.tool
+```
+
+Run the health command on the server: the API health route uses the local backend port, not the public frontend URL. Health checks do not require login and do not prove that exchange credentials or trading permissions are valid. Check **Brokers → Verify** and instance status separately.
+
+## 10. Remove the local sign-in cookie
 
 Run this after finishing the API commands. The temporary cookie file contains a signed session token.
 
